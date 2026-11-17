@@ -168,3 +168,163 @@ test('meeting-rules.js is served so the public and admin browser views can use s
   assert.equal(response.status, 200);
   assert.match(await response.text(), /hasThursdayMeeting/);
 });
+
+test('CO visit uses Tuesday within the weekly range and not Thursday', () => {
+  const week = seedWeek('2026-11-16');
+  week.weekType = 'co_visit';
+  assert.equal(meetingRules.meetingDayOf(week), 'tuesday');
+  assert.equal(meetingRules.meetingDateFor(week), '2026-11-17');
+  assert.equal(meetingRules.hasMeeting(week), true);
+  assert.equal(meetingRules.hasThursdayMeeting(week), false);
+  assert.match(meetingRules.specialNotice(week), /Tuesday, not Thursday/);
+  assert.equal(meetingRules.meetingDateFor(seedWeek('2026-11-16')), '2026-11-19');
+});
+
+test('no-meeting weeks do not have a misleading Thursday meeting date', () => {
+  for (const type of ['circuit_assembly', 'convention']) {
+    const week = seedWeek('2026-11-16');
+    week.weekType = type;
+    assert.equal(meetingRules.meetingDayOf(week), null);
+    assert.equal(meetingRules.meetingDateFor(week), null);
+    assert.equal(meetingRules.hasMeeting(week), false);
+  }
+  const memorial = seedWeek('2026-11-16');
+  memorial.weekType = 'memorial';
+  assert.equal(meetingRules.meetingDateFor(memorial), null);
+  memorial.memorialTiming = 'weekend';
+  assert.equal(meetingRules.meetingDateFor(memorial), '2026-11-19');
+});
+
+test('CO bulk Pending marks all empty roles while keeping existing names intact', () => {
+  const week = seedWeek('2026-11-16');
+  week.weekType = 'co_visit';
+  week.treasures[0].assignee = 'Brother K.';
+  week.ministry[0].assistant = 'Sister L.';
+  const marked = meetingRules.markEmptyRolesPending(week);
+  assert.equal(marked, 10); // chairman, two treasures, five ministry, one living, CO speaker
+  assert.equal(week.chairmanPending, true);
+  assert.equal(week.treasures[0].assignee, 'Brother K.');
+  assert.notEqual(week.treasures[0].assigneePending, true);
+  assert.equal(week.treasures[1].assigneePending, true);
+  assert.equal(week.ministry[0].assistant, 'Sister L.');
+  assert.notEqual(week.ministry[0].assistantPending, true);
+  assert.equal(week.ministry[1].assistantPending, true);
+  assert.equal(week.coTalk.assigneePending, true);
+  assert.equal(week.living.at(-1).conductorPending, undefined);
+  assert.equal(meetingRules.markEmptyRolesPending(week), 0); // idempotent
+});
+
+test('a CO week with Pending assignments can be published and publicly displayed', () => {
+  const week = seedWeek('2026-11-16');
+  week.weekType = 'co_visit';
+  meetingRules.markEmptyRolesPending(week);
+  week.published = true;
+  const saved = normaliseWeek(week, '2026-11-16');
+  const publicView = publicWeek(saved);
+  assert.equal(publicView.published, true);
+  assert.equal(publicView.chairmanPending, true);
+  assert.ok(publicView.treasures.every((p) => p.assigneePending));
+  assert.ok(publicView.ministry.every((p) => p.assigneePending && p.assistantPending));
+  assert.equal(publicView.coTalk.assigneePending, true);
+  assert.ok(publicView.living.every((p) => p.type !== 'study'));
+  assert.equal(meetingRules.meetingDateFor(publicView), '2026-11-17');
+});
+
+test('typing a confirmed person name clears a previously Pending role on save', () => {
+  const week = seedWeek('2026-11-16');
+  week.weekType = 'co_visit';
+  meetingRules.markEmptyRolesPending(week);
+  week.chairman = 'Brother Chairman';
+  week.treasures[0].assignee = 'Brother Assignee';
+  week.ministry[0].assistant = 'Sister Assistant';
+  week.coTalk.assignee = 'CO Speaker';
+  const saved = normaliseWeek(week, '2026-11-16');
+  assert.equal(saved.chairmanPending, false);
+  assert.equal(saved.treasures[0].assigneePending, false);
+  assert.equal(saved.ministry[0].assistantPending, false);
+  assert.equal(saved.coTalk.assigneePending, false);
+  assert.equal(saved.treasures[1].assigneePending, true);
+  assert.equal(saved.ministry[1].assistantPending, true);
+});
+
+test('bulk Pending applies only to CO weeks and keeps regular schedules unchanged', () => {
+  const regular = seedWeek('2026-11-16');
+  assert.equal(meetingRules.markEmptyRolesPending(regular), 0);
+  assert.equal(regular.chairmanPending, false);
+  assert.equal(regular.treasures[0].assigneePending, undefined);
+});
+
+test('public browser view actually renders Tuesday and Pending in the visible programme', async () => {
+  const vm = require('node:vm');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const week = seedWeek('2026-11-16');
+  week.weekType = 'co_visit';
+  week.published = true;
+  meetingRules.markEmptyRolesPending(week);
+  const elements = new Map();
+  const classes = { add() {}, remove() {}, toggle() {} };
+  const getElementById = (id) => {
+    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', value: '',
+      classList: classes, addEventListener() {}, focus() {} });
+    return elements.get(id);
+  };
+  const sandbox = {
+    window: { location: { pathname: '/', origin: 'http://example.org' }, MeetingRules: meetingRules, scrollTo() {} },
+    document: { body: { classList: classes }, getElementById, addEventListener() {} },
+    Intl, Date, URL, console, setTimeout, clearTimeout,
+    fetch: async () => ({ ok: true, json: async () => ({
+      authenticated: false, adminEnabled: true, weeks: [publicWeek(normaliseWeek(week, week.weekStart))],
+      currentWeekStart: week.weekStart
+    }) })
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), sandbox);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const visible = getElementById('main-content').innerHTML;
+  const navigation = getElementById('week-navigation').innerHTML;
+  assert.match(visible, /Tuesday, 17 November/);
+  assert.match(navigation, /Tue 17 Nov/);
+  assert.match(visible, /Pending/);
+  assert.match(visible, /First Circuit Overseer/);
+  assert.doesNotMatch(visible, /Thursday, 19 November/);
+  assert.doesNotMatch(visible, /Congregation Bible Study<\/strong>/);
+});
+
+test('admin editor can toggle Pending individually even in old saved weeks without Pending fields', async () => {
+  const vm = require('node:vm');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const week = seedWeek('2026-11-16');
+  week.weekType = 'co_visit';
+  delete week.chairmanPending;
+  delete week.coTalk.assigneePending;
+  const elements = new Map();
+  const classes = { add() {}, remove() {}, toggle() {} };
+  const getElementById = (id) => {
+    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', value: '',
+      classList: classes, addEventListener() {}, focus() {} });
+    return elements.get(id);
+  };
+  const sandbox = {
+    window: { location: { pathname: '/admin', origin: 'http://example.org' }, MeetingRules: meetingRules,
+      scrollTo() {}, confirm: () => true },
+    document: { body: { classList: classes }, getElementById, addEventListener() {} },
+    Intl, Date, URL, console, setTimeout, clearTimeout,
+    fetch: async () => ({ ok: true, json: async () => ({
+      authenticated: true, adminEnabled: true, weeks: [week], currentWeekStart: week.weekStart
+    }) })
+  };
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), ctx);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  vm.runInContext('startEdit()', ctx);
+  assert.match(getElementById('main-content').innerHTML, /Tuesday, 17 November/);
+  assert.match(getElementById('main-content').innerHTML, /Mark unassigned roles as Pending/);
+  vm.runInContext(`updateEditorField({ dataset: { section: 'treasures', index: '0', field: 'assigneePending' },
+    matches: () => true, type: 'checkbox', checked: true, tagName: 'INPUT' })`, ctx);
+  assert.equal(vm.runInContext('state.draft.treasures[0].assigneePending', ctx), true);
+  vm.runInContext(`performAction({ dataset: { action: 'mark-co-pending' } })`, ctx);
+  assert.equal(vm.runInContext('state.draft.chairmanPending', ctx), true);
+  assert.equal(vm.runInContext('state.draft.coTalk.assigneePending', ctx), true);
+  assert.equal(vm.runInContext('state.draft.treasures[1].assigneePending', ctx), true);
+});

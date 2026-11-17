@@ -78,10 +78,13 @@ function normalisePart(part, kind, i) {
   const p = part && typeof part === 'object' ? part : {};
   const base = { id: cleaned(p.id, 90) || crypto.randomUUID(), number: cleaned(p.number, 15),
     title: cleaned(p.title, 120), topic: cleaned(p.topic, 250), minutes: minutes(p.minutes, 5) };
-  if (kind === 'study') return { ...base, id: 'study', type: 'study', title: 'Congregation Bible Study', conductor: cleaned(p.conductor), reader: cleaned(p.reader) };
-  if (kind === 'ministry') return { ...base, assignee: cleaned(p.assignee), assistant: cleaned(p.assistant) };
-  if (kind === 'treasures') return { ...base, id: ['talk', 'gems', 'reading'][i], assignee: cleaned(p.assignee) };
-  return { ...base, assignee: cleaned(p.assignee) };
+  // Pending is tracked separately from the name, so it can be cleared when a person is chosen.
+  const role = (name, flag) => ({ [name]: cleaned(p[name]), [flag]: p[flag] === true && !cleaned(p[name]) });
+  if (kind === 'study') return { ...base, id: 'study', type: 'study', title: 'Congregation Bible Study',
+    ...role('conductor', 'conductorPending'), ...role('reader', 'readerPending') };
+  if (kind === 'ministry') return { ...base, ...role('assignee', 'assigneePending'), ...role('assistant', 'assistantPending') };
+  if (kind === 'treasures') return { ...base, id: ['talk', 'gems', 'reading'][i], ...role('assignee', 'assigneePending') };
+  return { ...base, ...role('assignee', 'assigneePending') };
 }
 function normaliseWeek(input, weekStart) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid week data.');
@@ -98,6 +101,7 @@ function normaliseWeek(input, weekStart) {
   coTalk.id = 'co-talk'; coTalk.type = 'co_talk';
   coTalk.title = coTalk.title || 'First Circuit Overseer’s Talk';
   return { weekStart, published: input.published === true, chairman: cleaned(input.chairman),
+    chairmanPending: input.chairmanPending === true && !cleaned(input.chairman),
     weekType, memorialTiming: meetingRules.timingOf(input), coTalk,
     treasures: input.treasures.map((p, i) => normalisePart(p, 'treasures', i)),
     ministry: input.ministry.map((p, i) => normalisePart(p, 'ministry', i)),
@@ -110,9 +114,9 @@ function isValidMonday(date) {
 }
 function publicWeek(week) {
   const type = meetingRules.typeOf(week);
-  if (!meetingRules.hasThursdayMeeting(week)) return {
+  if (!meetingRules.hasMeeting(week)) return {
     weekStart: week.weekStart, published: week.published, weekType: type,
-    memorialTiming: meetingRules.timingOf(week), chairman: '',
+    memorialTiming: meetingRules.timingOf(week), chairman: '', chairmanPending: false,
     treasures: [], ministry: [], living: [], coTalk: null
   };
   if (type === 'co_visit') {

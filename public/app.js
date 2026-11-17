@@ -18,9 +18,12 @@ const short = (value, max = 100) => htmlEscape(String(value ?? '').slice(0, max)
 const atMidday = (iso) => new Date(`${iso}T12:00:00Z`);
 const addDays = (iso, days) => { const d = atMidday(iso); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 const dateFormat = (date, options) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...options }).format(atMidday(date));
-const getWeek = (iso) => {
+const getWeek = (iso, week = { weekStart: iso }) => {
   const end = addDays(iso, 6), a = atMidday(iso), b = atMidday(end);
-  const year = atMidday(rules.thursdayFor(iso)).getUTCFullYear();
+  const meetingDate = rules.meetingDateFor(week);
+  const displayDate = meetingDate || rules.thursdayFor(iso);
+  const dayName = meetingDate ? dateFormat(meetingDate, { weekday: 'long' }) : 'No meeting';
+  const year = atMidday(displayDate).getUTCFullYear();
   const sameMonth = a.getUTCMonth() === b.getUTCMonth() && a.getUTCFullYear() === b.getUTCFullYear();
   const months = sameMonth
     ? `${a.getUTCDate()} – ${b.getUTCDate()} ${dateFormat(end, { month: 'long' })}`
@@ -28,8 +31,10 @@ const getWeek = (iso) => {
   const sidebar = sameMonth
     ? `${a.getUTCDate()} – ${b.getUTCDate()} ${dateFormat(end, { month: 'short' })}`
     : `${a.getUTCDate()} ${dateFormat(iso, { month: 'short' })} – ${b.getUTCDate()} ${dateFormat(end, { month: 'short' })}`;
-  const thursday = rules.thursdayFor(iso);
-  return { end, year, months, sidebar, thursday, thursdayLong: dateFormat(thursday, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), month: dateFormat(thursday, { month: 'short' }).toUpperCase(), day: atMidday(thursday).getUTCDate(), monthYear: `${dateFormat(iso, { month: 'long' })} ${a.getUTCFullYear()}`, full: `${months} ${year}` };
+  return { end, year, months, sidebar, meetingDate, dayName,
+    displayDate, dateLong: meetingDate ? dateFormat(meetingDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'No meeting this week',
+    month: dateFormat(displayDate, { month: 'short' }).toUpperCase(),
+    day: atMidday(displayDate).getUTCDate(), monthYear: `${dateFormat(iso, { month: 'long' })} ${a.getUTCFullYear()}`, full: `${months} ${year}` };
 };
 function visibleWeeks() {
   return state.weeks.filter((w) => {
@@ -81,10 +86,10 @@ function renderHeader() {
 function navGroup(title, weeks) {
   if (!weeks.length) return '';
   return `<div class="nav-group-title">${title}</div>${weeks.map((w) => {
-    const display = getWeek(w.weekStart);
+    const display = getWeek(w.weekStart, w);
     return `<button type="button" class="week-link ${state.selected === w.weekStart ? 'active' : ''}" data-action="select-week" data-week="${w.weekStart}" aria-current="${state.selected === w.weekStart ? 'page' : 'false'}">
       <span class="nav-date-box"><strong>${display.day}</strong><small>${display.month}</small></span>
-      <span class="week-link-text"><strong>Thu ${display.day} ${dateFormat(display.thursday, { month: 'short' })}</strong><small>${htmlEscape(display.sidebar)} · ${rules.typeOf(w) === 'regular' ? (w.weekStart === state.currentWeekStart ? 'Current week' : w.published ? 'Published' : 'Draft') : htmlEscape(rules.TYPE_LABELS[rules.typeOf(w)])}</small></span>
+      <span class="week-link-text"><strong>${display.meetingDate ? `${display.dayName.slice(0, 3)} ${display.day} ${dateFormat(display.displayDate, { month: 'short' })}` : 'No meeting this week'}</strong><small>${htmlEscape(display.sidebar)} · ${rules.typeOf(w) === 'regular' ? (w.weekStart === state.currentWeekStart ? 'Current week' : w.published ? 'Published' : 'Draft') : htmlEscape(rules.TYPE_LABELS[rules.typeOf(w)])}</small></span>
       <span class="nav-status-dot ${w.published ? '' : 'draft'}" title="${w.published ? 'Published' : 'Draft'}"></span>
     </button>`;
   }).join('')}`;
@@ -101,17 +106,17 @@ function renderNav() {
     <button class="add-row side-add-week" type="button" data-action="add-week">＋ Add a future week</button>
     <button class="button button-outline side-past-toggle" type="button" data-action="toggle-past">${state.showPast ? 'Hide previous weeks' : 'Show previous weeks'}</button>`;
 }
-function person(name, role) {
-  return `<div class="person-name ${name ? '' : 'unassigned'}">${name ? short(name) : 'To be assigned'}${role ? ` <span class="person-meta">· ${htmlEscape(role)}</span>` : ''}</div>`;
+function person(name, role, pending = false) {
+  return `<div class="person-name ${name ? '' : pending ? 'pending-name' : 'unassigned'}">${name ? short(name) : pending ? 'Pending' : 'To be assigned'}${role ? ` <span class="person-meta">· ${htmlEscape(role)}</span>` : ''}</div>`;
 }
 function assignmentsRow(part, section) {
   const people = section === 'ministry'
-    ? `<div class="assigned-people">${person(part.assignee, 'Assignee')}${part.assistant ? `<div class="assigned-second">${short(part.assistant)} <span class="person-meta">· Assistant</span></div>` : `<div class="assigned-second"><span class="person-meta">Assistant: Not assigned</span></div>`}</div>`
+    ? `<div class="assigned-people">${person(part.assignee, 'Assignee', part.assigneePending)}${part.assistant ? `<div class="assigned-second">${short(part.assistant)} <span class="person-meta">· Assistant</span></div>` : part.assistantPending ? `<div class="assigned-second pending-name">Pending <span class="person-meta">· Assistant</span></div>` : `<div class="assigned-second"><span class="person-meta">Assistant: Not assigned</span></div>`}</div>`
     : part.type === 'co_talk'
-    ? `<div class="assigned-people">${person(part.assignee, 'Circuit Overseer')}</div>`
+    ? `<div class="assigned-people">${person(part.assignee, 'Circuit Overseer', part.assigneePending)}</div>`
     : part.type === 'study'
-    ? `<div class="assigned-people">${person(part.conductor, 'Conductor')}${part.reader ? `<div class="assigned-second">${short(part.reader)} <span class="person-meta">· Reader</span></div>` : `<div class="assigned-second"><span class="person-meta">Reader: Not assigned</span></div>`}</div>`
-    : `<div class="assigned-people">${person(part.assignee, '')}</div>`;
+    ? `<div class="assigned-people">${person(part.conductor, 'Conductor', part.conductorPending)}${part.reader ? `<div class="assigned-second">${short(part.reader)} <span class="person-meta">· Reader</span></div>` : part.readerPending ? `<div class="assigned-second pending-name">Pending <span class="person-meta">· Reader</span></div>` : `<div class="assigned-second"><span class="person-meta">Reader: Not assigned</span></div>`}</div>`
+    : `<div class="assigned-people">${person(part.assignee, '', part.assigneePending)}</div>`;
   return `<div class="assignment-row ${['study', 'co_talk'].includes(part.type) ? 'study-row' : ''}">
     <div class="assignment-num">${short(part.number || '—', 15)}</div>
     <div class="assignment-details"><strong>${short(part.title || 'Untitled assignment')}</strong>${part.topic ? `<div class="topic">${short(part.topic, 250)}</div>` : ''}</div>
@@ -123,9 +128,9 @@ function sectionCard({ color, icon, name, note, parts, section }) {
   return `<section class="section-panel ${color}" aria-label="${htmlEscape(name)}"><div class="section-header"><div class="section-symbol ${color}" aria-hidden="true">${icon}</div><div class="section-header-title"><h3>${htmlEscape(name)}</h3><p>${htmlEscape(note)}</p></div><span class="section-count">${parts.length} ${parts.length === 1 ? 'PART' : 'PARTS'}</span></div><div>${parts.length ? parts.map((p) => assignmentsRow(p, section)).join('') : '<div class="section-footer">No assignments added for this section yet.</div>'}</div></section>`;
 }
 function renderSchedule(week) {
-  const display = getWeek(week.weekStart);
+  const display = getWeek(week.weekStart, week);
   const type = rules.typeOf(week);
-  const hasMeeting = rules.hasThursdayMeeting(week);
+  const hasMeeting = rules.hasMeeting(week);
   const livingParts = rules.visibleLiving(week);
   const count = hasMeeting ? week.treasures.length + week.ministry.length + livingParts.length : 0;
   const notice = rules.specialNotice(week);
@@ -138,18 +143,18 @@ function renderSchedule(week) {
       ${!state.viewPublic ? '<button class="button button-primary" type="button" data-action="edit-week">✎ Edit this week</button>' : ''}` : ''}</div></div>
     ${previewBanner}${banner}
     <section class="hero"><div class="hero-copy"><span class="hero-label">✦ &nbsp; ${week.weekStart === state.currentWeekStart ? 'THIS WEEK’S PROGRAMME' : 'UPCOMING PROGRAMME'}</span>
-      <h2>Thursday, ${htmlEscape(dateFormat(display.thursday, { day: 'numeric', month: 'long' }))}</h2>
+      <h2>${display.meetingDate ? `${htmlEscape(display.dayName)}, ${htmlEscape(dateFormat(display.displayDate, { day: 'numeric', month: 'long' }))}` : 'No weekday meeting'}</h2>
       <p>${htmlEscape(display.year)} &nbsp;·&nbsp; ${htmlEscape(rules.TYPE_LABELS[type])}<br>Week of ${htmlEscape(display.months)} ${htmlEscape(display.year)}</p></div>
-      <div class="hero-aside"><span class="hero-flower" aria-hidden="true">✳</span><div class="hero-calendar"><span>THURSDAY</span><strong>${display.day}</strong><small>${display.month} ${htmlEscape(display.year)}</small></div></div></section>
+      <div class="hero-aside"><span class="hero-flower" aria-hidden="true">✳</span><div class="hero-calendar"><span>${htmlEscape(display.dayName.toUpperCase())}</span><strong>${display.meetingDate ? display.day : '—'}</strong><small>${display.meetingDate ? `${display.month} ${htmlEscape(display.year)}` : 'SPECIAL WEEK'}</small></div></div></section>
     ${notice ? `<div class="special-notice ${hasMeeting ? 'meeting-held' : 'no-meeting'}"><span class="special-notice-icon" aria-hidden="true">${hasMeeting ? '✦' : '▦'}</span><div><strong>${htmlEscape(rules.TYPE_LABELS[type])}</strong><p>${htmlEscape(notice)}</p></div></div>` : ''}
-    ${hasMeeting ? `<div class="info-strip"><div class="stat-card"><span class="stat-icon purple">♙</span><div><span>Meeting chairman</span><strong>${week.chairman ? short(week.chairman) : 'To be assigned'}</strong></div></div>
+    ${hasMeeting ? `<div class="info-strip"><div class="stat-card"><span class="stat-icon purple">♙</span><div><span>Meeting chairman</span><strong>${week.chairman ? short(week.chairman) : week.chairmanPending ? '<span class="pending-name">Pending</span>' : 'To be assigned'}</strong></div></div>
       <div class="stat-card"><span class="stat-icon teal">▦</span><div><span>Total assignments</span><strong>${count} scheduled parts</strong></div></div>
-      <div class="stat-card"><span class="stat-icon orange">◷</span><div><span>Meeting date</span><strong>${htmlEscape(display.thursdayLong)}</strong></div></div></div>
+      <div class="stat-card"><span class="stat-icon orange">◷</span><div><span>Meeting date</span><strong>${htmlEscape(display.dateLong)}</strong></div></div></div>
     <div class="content-grid">
       ${sectionCard({ color: 'purple', icon: '✧', name: 'Treasures from God’s Word', note: 'Talk · Spiritual Gems · Bible Reading', parts: week.treasures, section: 'treasures' })}
       ${sectionCard({ color: 'teal', icon: '✦', name: 'Apply Yourself to the Field Ministry', note: 'Practice and improve your ministry skills', parts: week.ministry, section: 'ministry' })}
       ${sectionCard({ color: 'orange', icon: '♡', name: 'Living as Christians', note: type === 'co_visit' ? 'Christian living · First Circuit Overseer’s Talk' : 'Christian living · Congregation Bible Study', parts: livingParts, section: 'living' })}
-    </div>` : `<section class="no-meeting-card"><div class="no-meeting-emblem" aria-hidden="true">▦</div><h3>No Life and Ministry meeting this Thursday</h3><p>No assignments are displayed for this week. Use the menu on the left to check the next scheduled meeting.</p></section>`}`;
+    </div>` : `<section class="no-meeting-card"><div class="no-meeting-emblem" aria-hidden="true">▦</div><h3>No Life and Ministry meeting this week</h3><p>No assignments are displayed for this week. Use the menu on the left to check the next scheduled meeting.</p></section>`}`;
 }
 function renderEmpty() {
   dom.main.innerHTML = `<div class="page-heading"><div><div class="eyebrow">WEEKLY MEETING PROGRAMME</div><h1>Life and Ministry Schedule</h1><p>Meeting assignments, week by week.</p></div></div>
@@ -162,6 +167,13 @@ function formInput(label, value, section, index, field, placeholder = '', extraC
   const type = field === 'minutes' ? 'number' : 'text';
   const bounds = type === 'number' ? ' min="0" max="240" step="1"' : ' maxlength="250"';
   return `<div class="field ${extraClass}"><label>${htmlEscape(label)}</label><input type="${type}" ${attrs}${bounds} value="${htmlEscape(value)}" placeholder="${htmlEscape(placeholder)}" autocomplete="off" /></div>`;
+}
+function formPersonInput(label, value, section, index, field, pending = false, placeholder = 'Full name') {
+  const pendingKey = `${field}Pending`;
+  const attrs = section ? `data-section="${section}" data-index="${index}"` : '';
+  return `<div class="field person-field"><label>${htmlEscape(label)}</label>
+    <input type="text" ${attrs} data-field="${field}" maxlength="160" value="${htmlEscape(value)}" placeholder="${htmlEscape(placeholder)}" autocomplete="off" />
+    <label class="pending-field-toggle"><input type="checkbox" ${attrs} data-field="${pendingKey}" ${pending ? 'checked' : ''} ${value ? 'disabled' : ''}/><span>Pending — name not confirmed yet</span></label></div>`;
 }
 function editorAssignment(part, section, i) {
   const isStudy = part.type === 'study';
@@ -180,8 +192,8 @@ function editorAssignment(part, section, i) {
       ${formInput('Minutes', part.minutes, section, i, 'minutes', 'e.g. 5')}
     </div>
     <div class="field-grid two field-grid-spaced">${formInput('Topic or theme (optional)', part.topic, section, i, 'topic', 'Enter the talk topic or theme', 'span-full')}
-      ${isStudy ? `${formInput('Conductor', part.conductor, section, i, 'conductor', 'Full name')}${formInput('Reader', part.reader, section, i, 'reader', 'Full name')}`
-      : `${formInput('Assignee', part.assignee, section, i, 'assignee', 'Full name')}${section === 'ministry' ? formInput('Assistant', part.assistant, section, i, 'assistant', 'Full name (optional)') : ''}`}
+      ${isStudy ? `${formPersonInput('Conductor', part.conductor, section, i, 'conductor', part.conductorPending)}${formPersonInput('Reader', part.reader, section, i, 'reader', part.readerPending)}`
+      : `${formPersonInput('Assignee', part.assignee, section, i, 'assignee', part.assigneePending)}${section === 'ministry' ? formPersonInput('Assistant', part.assistant, section, i, 'assistant', part.assistantPending, 'Full name (optional)') : ''}`}
     </div></div>`;
 }
 function editPanel(label, description, section, action, addLabel) {
@@ -199,25 +211,26 @@ function selectField(label, field, value, choices, note = '') {
     ${note ? `<p class="field-hint">${htmlEscape(note)}</p>` : ''}</div>`;
 }
 function renderEditor() {
-  const week = state.draft, display = getWeek(week.weekStart);
-  const type = rules.typeOf(week), meetingHeld = rules.hasThursdayMeeting(week);
+  const week = state.draft, display = getWeek(week.weekStart, week);
+  const type = rules.typeOf(week), meetingHeld = rules.hasMeeting(week);
   const notice = rules.specialNotice(week);
   const coTalk = { ...rules.defaultCOTalk(week), ...(week.coTalk || {}) };
-  dom.main.innerHTML = `<div class="editor-head"><div class="editor-title"><p class="eyebrow">ADMINISTRATOR · EDIT WEEK</p><h1>Thursday, ${htmlEscape(dateFormat(display.thursday, { day: 'numeric', month: 'long', year: 'numeric' }))}</h1><p>Week of ${htmlEscape(display.full)} · Select the meeting type before entering assignments.</p></div>
+  dom.main.innerHTML = `<div class="editor-head"><div class="editor-title"><p class="eyebrow">ADMINISTRATOR · EDIT WEEK</p><h1>${display.meetingDate ? htmlEscape(display.dateLong) : `No weekday meeting · ${htmlEscape(display.full)}`}</h1><p>Week of ${htmlEscape(display.full)} · Select the meeting type before entering assignments.</p></div>
     <div class="editor-actions"><span class="status-badge ${week.published ? 'published' : ''}">${week.published ? '● PUBLISHED' : '● DRAFT'}</span><button class="button button-soft" type="button" data-action="auto-number" ${meetingHeld ? '' : 'disabled'}># Auto-number</button><button class="button button-outline" type="button" data-action="cancel-edit">✕ Close editor</button></div></div>
     <section class="edit-panel special-week-editor"><div class="edit-panel-head"><div><h3>Meeting type for this week</h3><p>Choose a regular or special week. The display adjusts automatically.</p></div></div>
       <div class="edit-panel-body"><div class="field-grid">${selectField('Week type', 'weekType', type, rules.TYPE_LABELS)}
-        ${type === 'memorial' ? selectField('When is the Memorial?', 'memorialTiming', rules.timingOf(week), rules.TIMING_LABELS, 'Weekday: no Thursday meeting. Weekend: Thursday meeting holds; no weekend meeting.') : `<div class="edit-option-explainer"><strong>Meeting day</strong><span>Thursday, ${htmlEscape(dateFormat(display.thursday, { day: 'numeric', month: 'long', year: 'numeric' }))}</span></div>`}</div>
+        ${type === 'memorial' ? selectField('When is the Memorial?', 'memorialTiming', rules.timingOf(week), rules.TIMING_LABELS, 'Weekday: no Thursday meeting. Weekend: Thursday meeting holds; no weekend meeting.') : `<div class="edit-option-explainer"><strong>Meeting day</strong><span>${display.meetingDate ? htmlEscape(display.dateLong) : 'No meeting this week'}</span></div>`}</div>
         ${notice ? `<div class="edit-note special-editor-note">${htmlEscape(notice)}</div>` : ''}
-        ${!meetingHeld ? '<div class="edit-note">The existing chairman and assignment details are safely preserved. They are hidden from the public while this week has no Thursday meeting. Switch to a meeting week to edit them.</div>' : ''}
+        ${!meetingHeld ? '<div class="edit-note">The existing chairman and assignment details are safely preserved. They are hidden from the public while this week has no weekday meeting. Switch to a meeting week to edit them.</div>' : ''}
+        ${type === 'co_visit' ? '<div class="pending-tools"><div><strong>Names not available yet?</strong><p>Set every unfilled role to Pending at once. Any names already entered will remain unchanged. You can replace Pending with a name later.</p></div><button type="button" class="button button-soft" data-action="mark-co-pending">Mark unassigned roles as Pending</button></div>' : ''}
       </div></section>
-    ${meetingHeld ? `<section class="edit-panel"><div class="edit-panel-head"><div><h3>Meeting chairman</h3><p>Assign the brother who will chair this Thursday meeting.</p></div></div><div class="edit-panel-body"><div class="field-grid">${formInput('Chairman’s name', week.chairman, '', '', 'chairman', 'Enter chairman’s full name')}</div></div></section>
+    ${meetingHeld ? `<section class="edit-panel"><div class="edit-panel-head"><div><h3>Meeting chairman</h3><p>Assign the brother who will chair this ${htmlEscape(display.dayName)} meeting.</p></div></div><div class="edit-panel-body"><div class="field-grid">${formPersonInput('Chairman’s name', week.chairman, '', '', 'chairman', week.chairmanPending, 'Enter chairman’s full name')}</div></div></section>
     ${editPanel('1. Treasures from God’s Word', 'The three regular assignments', 'treasures', null, null)}
     ${editPanel('2. Apply Yourself to the Field Ministry', 'Add or remove parts; every part has Assignee and Assistant fields', 'ministry', 'add-ministry', 'Add field ministry assignment')}
     ${editPanel('3. Living as Christians', type === 'co_visit' ? 'Congregation Bible Study is replaced by the First Circuit Overseer’s Talk' : 'Add or remove parts before the Congregation Bible Study', 'living', 'add-living', 'Add Christian living assignment')}
     ${type === 'co_visit' ? `<section class="edit-panel co-talk-editor"><div class="edit-panel-head"><div><h3>First Circuit Overseer’s Talk</h3><p>Shown instead of the Congregation Bible Study. No conductor or reader is needed.</p></div></div><div class="edit-panel-body">
       <div class="field-grid three">${formInput('Part number', coTalk.number, 'coTalk', 0, 'number', 'e.g. 8')}${formInput('Talk title', coTalk.title, 'coTalk', 0, 'title', 'First Circuit Overseer’s Talk')}${formInput('Minutes (0 = not specified)', coTalk.minutes, 'coTalk', 0, 'minutes', 'Optional')}</div>
-      <div class="field-grid two field-grid-spaced">${formInput('Talk theme (optional)', coTalk.topic, 'coTalk', 0, 'topic', 'Theme', 'span-full')}${formInput('Circuit Overseer / Speaker', coTalk.assignee, 'coTalk', 0, 'assignee', 'Full name')}</div></div></section>` : ''}` : ''}
+      <div class="field-grid two field-grid-spaced">${formInput('Talk theme (optional)', coTalk.topic, 'coTalk', 0, 'topic', 'Theme', 'span-full')}${formPersonInput('Circuit Overseer / Speaker', coTalk.assignee, 'coTalk', 0, 'assignee', coTalk.assigneePending)}</div></div></section>` : ''}` : ''}
     <div class="sticky-editor-bar"><p>${state.dirty ? '● You have unsaved changes' : 'Keep this week as a draft or make it public.'}</p><div class="editor-actions">
       ${week.published ? '<button type="button" class="button button-danger" data-action="unpublish">Unpublish</button>' : ''}
       <button type="button" class="button button-outline" data-action="save-week">Save ${week.published ? 'changes' : 'draft'}</button>
@@ -329,6 +342,11 @@ async function performAction(element) {
   else if (action === 'publish-week') await saveWeek(true);
   else if (action === 'unpublish') {
     if (window.confirm('Unpublish this week? It will no longer appear on the public schedule.')) await saveWeek(false);
+  } else if (action === 'mark-co-pending') {
+    if (!state.editing || rules.typeOf(state.draft) !== 'co_visit') return;
+    const changed = rules.markEmptyRolesPending(state.draft);
+    if (changed) { state.dirty = true; render(); }
+    toast(changed ? `${changed} unfilled role${changed === 1 ? '' : 's'} marked Pending. Save or publish the week to keep them.` : 'All unfilled roles are already marked Pending.');
   } else if (action === 'auto-number') {
     let n = 1;
     for (const section of ['treasures', 'ministry', 'living']) {
@@ -365,8 +383,16 @@ function updateEditorField(input) {
   if (!state.editing || !state.draft || !input.matches('input[data-field], select[data-field]')) return;
   const { section, index, field } = input.dataset;
   const target = section === 'coTalk' ? state.draft.coTalk : section ? state.draft[section]?.[Number(index)] : state.draft;
-  if (!target || !Object.prototype.hasOwnProperty.call(target, field)) return;
-  target[field] = field === 'minutes' ? (input.value === '' ? 0 : Number(input.value)) : input.value;
+  const isPendingToggle = /^(chairman|assignee|assistant|conductor|reader)Pending$/.test(field);
+  if (!target || (!Object.prototype.hasOwnProperty.call(target, field) && !isPendingToggle)) return;
+  target[field] = input.type === 'checkbox' ? input.checked : field === 'minutes'
+    ? (input.value === '' ? 0 : Number(input.value)) : input.value;
+  if (['chairman', 'assignee', 'assistant', 'conductor', 'reader'].includes(field)) {
+    // A confirmed name takes precedence over Pending.
+    if (input.value.trim()) target[`${field}Pending`] = false;
+    const toggle = input.closest('.person-field')?.querySelector('input[type="checkbox"]');
+    if (toggle) { toggle.disabled = Boolean(input.value.trim()); if (toggle.disabled) toggle.checked = false; }
+  }
   state.dirty = true;
   if (input.tagName === 'SELECT') render();
 }
@@ -374,7 +400,7 @@ document.addEventListener('input', (ev) => {
   if (ev.target.tagName !== 'SELECT') updateEditorField(ev.target);
 });
 document.addEventListener('change', (ev) => {
-  if (ev.target.tagName === 'SELECT') updateEditorField(ev.target);
+  if (ev.target.tagName === 'SELECT' || ev.target.type === 'checkbox') updateEditorField(ev.target);
 });
 document.getElementById('login-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();

@@ -6,18 +6,23 @@ A responsive website for organising **weekly Life and Ministry meeting assignmen
 
 - A **public weekly schedule** with a left-hand menu that starts at the current week and lists future published weeks.
 - A password-protected **administrator editor**. Visitors do not need accounts. Admin sign-in appears only at **`/admin`**; it is not displayed on the public link.
-- A **chairman** field for every week that has a Thursday meeting.
-- **Thursday-only meeting dates** clearly displayed in the public schedule, admin editor and weekly navigation. Week records still use Monday–Sunday internally to keep future schedules aligned.
+- A **chairman** field for every week that has a meeting (including Tuesday CO visits).
+- **Thursday meeting dates** for regular weeks, and **Tuesday meeting dates for CO weeks**, clearly displayed in the public schedule, admin editor and weekly navigation. Week records still use Monday–Sunday internally to keep future schedules aligned.
 - **Special week** setting: Regular, Circuit Overseer (CO) Visit, Circuit Assembly, Convention or Memorial.
-- **CO Visit:** replaces Congregation Bible Study with an editable First Circuit Overseer’s Talk (part number, title, theme, optional duration and speaker). The ordinary Bible Study entry is preserved but not displayed during CO week.
+- **CO Visit (Tuesday):** replaces Congregation Bible Study with an editable First Circuit Overseer’s Talk (part number, title, theme, optional duration and speaker). The ordinary Bible Study entry is preserved but not displayed during CO week.
 - **Circuit Assembly / Convention:** no Life and Ministry meeting assignments are displayed. A clear notice explains the special week.
 - **Memorial week:** choose Weekday (no Thursday meeting) or Weekend (Thursday meeting proceeds; no weekend meeting).
+- **Pending assignees:** during CO week click **Mark unassigned roles as Pending** to mark every empty role (including chairman, assignees, assistants and CO speaker). You can also toggle Pending individually beside each name field; entering a name automatically clears its Pending flag. Publish a week with all roles pending, then return to `/admin` to fill names later. Already assigned names are not overwritten.
 - **Treasures from God's Word:** 10-minute Talk, 10-minute Spiritual Gems, 5-minute Bible Reading; assignment number, title/topic and assignee fields.
 - **Apply Yourself to the Field Ministry:** add/remove/reorder assignments, with number, title, topic, duration, assignee and assistant for every part.
 - **Living as Christians:** add/remove/reorder parts. In regular weeks the final entry is Congregation Bible Study, with separate conductor and reader fields; during a CO visit the First CO Talk takes its place.
 - **Auto-number** button (you can also type numbers manually), draft saving, publishing/unpublishing, copy public link, and mobile layout.
 - Automatic creation of the current meeting week **and the next 11 weeks**, based on Nigeria's `Africa/Lagos` timezone. No fictional people are pre-assigned.
 - Published weeks remain visible to the public until they pass. Previous weeks can be accessed by the administrator.
+
+## CO-week example
+
+For the programme week **November 16–22, 2026**, setting **CO Visit** displays **Tuesday, November 17, 2026** in the public and admin calendars. You can leave every name blank and click **Mark unassigned roles as Pending**. Save or publish it; visitors then see **Pending** next to the parts with unconfirmed participants. When names become available, go back to the same week in `/admin`, enter them, and save your changes. Your existing Neon database is kept as-is.
 
 ## Run it on your computer (Windows, macOS, or Linux)
 
@@ -40,9 +45,9 @@ A responsive website for organising **weekly Life and Ministry meeting assignmen
 ### How to prepare the schedule
 
 1. Go to **`/admin`** on your website and enter the password from `.env`.
-2. Select the **Thursday meeting date** you need (for example **Thu 19 Nov** for the week of November 16–22).
+2. Select the **week** you need (for example, **November 16–22**). Regular weeks show **Thursday**, while CO visit weeks show **Tuesday**.
 3. Click **Edit this week**.
-4. Choose a **Meeting type** at the top of the editor. For a regular week, enter the chairman and participants; use **Add field ministry assignment** and **Add Christian living assignment** to change section lengths. For a CO week, edit the separate **First Circuit Overseer’s Talk** fields. For an assembly or convention, the assignment forms are hidden. For Memorial, select **Weekday** or **Weekend** to determine whether Thursday’s meeting is held.
+4. Choose a **Meeting type** at the top of the editor. For a regular week, enter the chairman and participants; use **Add field ministry assignment** and **Add Christian living assignment** to change section lengths. For a CO week, the meeting automatically changes to **Tuesday**. Edit the separate **First Circuit Overseer’s Talk** fields and click **Mark unassigned roles as Pending** if you do not have all the names yet. You can publish pending assignments and update the people afterwards. For an assembly or convention, the assignment forms are hidden. For Memorial, select **Weekday** or **Weekend** to determine whether Thursday’s meeting is held.
 5. Use **# Auto-number** for a clean sequence, or change any part number yourself.
 6. Click **Save draft** to keep it private, or **Publish week** to make it public.
 7. Click **Copy public link** and post that address in your WhatsApp/Telegram group.
@@ -51,13 +56,13 @@ Members opening the public root link (`/`) see only the current and future **pub
 
 ## Update your already-live Render website
 
-This is an **in-place code update**; you do **not** need a new Render service, Neon database or login password.
+This is an **in-place code update**, including Tuesday CO meetings and Pending assignment status; you do **not** need a new Render service, Neon database or login password.
 
 1. Extract the updated ZIP. In GitHub open your existing `janscobcreate/lifeandministryschedule` repository.
 2. Use **Add file > Upload files** to upload the contents of the extracted project folder, replacing existing files while **preserving folders** (especially `public/meeting-rules.js`, `public/app.js`, `public/styles.css`, and `public/index.html`). Commit the changes.
 3. If automatic deploys are disabled, visit **Render > your service > Manual Deploy > Deploy latest commit**.
 4. Open your website with `/admin`, select a week, click **Edit this week**, and select **Meeting type**. Save or publish.
-5. Check the public link without `/admin`. It should show **Thursday** and a special-week notice where selected.
+5. Check the public link without `/admin`. It should show **Tuesday for CO weeks** (Thursday for regular weeks), and a special-week notice where selected.
 
 **Existing assignments and your admin password are kept** in your current Neon database and Render environment variables. Do not upload `.env` or replace your Neon `DATABASE_URL`. This update is backwards-compatible with saved schedules: older records default to Regular week.
 
