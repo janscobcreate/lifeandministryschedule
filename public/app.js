@@ -12,6 +12,7 @@ const dom = {
   modal: document.getElementById('login-modal'), loginError: document.getElementById('login-error'),
   toast: document.getElementById('toast')
 };
+const rules = window.MeetingRules;
 const htmlEscape = (value) => String(value ?? '').replace(/[&<>"']/g, (x) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const short = (value, max = 100) => htmlEscape(String(value ?? '').slice(0, max));
 const atMidday = (iso) => new Date(`${iso}T12:00:00Z`);
@@ -19,7 +20,7 @@ const addDays = (iso, days) => { const d = atMidday(iso); d.setUTCDate(d.getUTCD
 const dateFormat = (date, options) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...options }).format(atMidday(date));
 const getWeek = (iso) => {
   const end = addDays(iso, 6), a = atMidday(iso), b = atMidday(end);
-  const year = b.getUTCFullYear();
+  const year = atMidday(rules.thursdayFor(iso)).getUTCFullYear();
   const sameMonth = a.getUTCMonth() === b.getUTCMonth() && a.getUTCFullYear() === b.getUTCFullYear();
   const months = sameMonth
     ? `${a.getUTCDate()} – ${b.getUTCDate()} ${dateFormat(end, { month: 'long' })}`
@@ -27,7 +28,8 @@ const getWeek = (iso) => {
   const sidebar = sameMonth
     ? `${a.getUTCDate()} – ${b.getUTCDate()} ${dateFormat(end, { month: 'short' })}`
     : `${a.getUTCDate()} ${dateFormat(iso, { month: 'short' })} – ${b.getUTCDate()} ${dateFormat(end, { month: 'short' })}`;
-  return { end, year, months, sidebar, month: dateFormat(iso, { month: 'short' }).toUpperCase(), day: a.getUTCDate(), monthYear: `${dateFormat(iso, { month: 'long' })} ${a.getUTCFullYear()}`, full: `${months} ${year}` };
+  const thursday = rules.thursdayFor(iso);
+  return { end, year, months, sidebar, thursday, thursdayLong: dateFormat(thursday, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), month: dateFormat(thursday, { month: 'short' }).toUpperCase(), day: atMidday(thursday).getUTCDate(), monthYear: `${dateFormat(iso, { month: 'long' })} ${a.getUTCFullYear()}`, full: `${months} ${year}` };
 };
 function visibleWeeks() {
   return state.weeks.filter((w) => {
@@ -82,7 +84,7 @@ function navGroup(title, weeks) {
     const display = getWeek(w.weekStart);
     return `<button type="button" class="week-link ${state.selected === w.weekStart ? 'active' : ''}" data-action="select-week" data-week="${w.weekStart}" aria-current="${state.selected === w.weekStart ? 'page' : 'false'}">
       <span class="nav-date-box"><strong>${display.day}</strong><small>${display.month}</small></span>
-      <span class="week-link-text"><strong>${display.sidebar}</strong><small>${w.weekStart === state.currentWeekStart ? 'Current week' : w.weekStart < state.currentWeekStart ? 'Previous week' : w.published ? 'Upcoming week' : 'Draft schedule'}</small></span>
+      <span class="week-link-text"><strong>Thu ${display.day} ${dateFormat(display.thursday, { month: 'short' })}</strong><small>${htmlEscape(display.sidebar)} · ${rules.typeOf(w) === 'regular' ? (w.weekStart === state.currentWeekStart ? 'Current week' : w.published ? 'Published' : 'Draft') : htmlEscape(rules.TYPE_LABELS[rules.typeOf(w)])}</small></span>
       <span class="nav-status-dot ${w.published ? '' : 'draft'}" title="${w.published ? 'Published' : 'Draft'}"></span>
     </button>`;
   }).join('')}`;
@@ -105,13 +107,15 @@ function person(name, role) {
 function assignmentsRow(part, section) {
   const people = section === 'ministry'
     ? `<div class="assigned-people">${person(part.assignee, 'Assignee')}${part.assistant ? `<div class="assigned-second">${short(part.assistant)} <span class="person-meta">· Assistant</span></div>` : `<div class="assigned-second"><span class="person-meta">Assistant: Not assigned</span></div>`}</div>`
+    : part.type === 'co_talk'
+    ? `<div class="assigned-people">${person(part.assignee, 'Circuit Overseer')}</div>`
     : part.type === 'study'
     ? `<div class="assigned-people">${person(part.conductor, 'Conductor')}${part.reader ? `<div class="assigned-second">${short(part.reader)} <span class="person-meta">· Reader</span></div>` : `<div class="assigned-second"><span class="person-meta">Reader: Not assigned</span></div>`}</div>`
     : `<div class="assigned-people">${person(part.assignee, '')}</div>`;
-  return `<div class="assignment-row ${part.type === 'study' ? 'study-row' : ''}">
+  return `<div class="assignment-row ${['study', 'co_talk'].includes(part.type) ? 'study-row' : ''}">
     <div class="assignment-num">${short(part.number || '—', 15)}</div>
     <div class="assignment-details"><strong>${short(part.title || 'Untitled assignment')}</strong>${part.topic ? `<div class="topic">${short(part.topic, 250)}</div>` : ''}</div>
-    <div class="minute-chip">${Number(part.minutes) || 0} min</div>
+    ${Number(part.minutes) > 0 ? `<div class="minute-chip">${Number(part.minutes)} min</div>` : ''}
     ${people}
   </div>`;
 }
@@ -120,7 +124,11 @@ function sectionCard({ color, icon, name, note, parts, section }) {
 }
 function renderSchedule(week) {
   const display = getWeek(week.weekStart);
-  const count = week.treasures.length + week.ministry.length + week.living.length;
+  const type = rules.typeOf(week);
+  const hasMeeting = rules.hasThursdayMeeting(week);
+  const livingParts = rules.visibleLiving(week);
+  const count = hasMeeting ? week.treasures.length + week.ministry.length + livingParts.length : 0;
+  const notice = rules.specialNotice(week);
   const banner = state.authenticated && !week.published ? `<div class="small-banner">✦ This week is still a draft. Only administrators can see it until it is published.</div>` : '';
   const previewBanner = state.viewPublic ? `<div class="small-banner green">✓ Public view — only published weeks are visible.</div>` : '';
   dom.main.innerHTML = `
@@ -130,16 +138,18 @@ function renderSchedule(week) {
       ${!state.viewPublic ? '<button class="button button-primary" type="button" data-action="edit-week">✎ Edit this week</button>' : ''}` : ''}</div></div>
     ${previewBanner}${banner}
     <section class="hero"><div class="hero-copy"><span class="hero-label">✦ &nbsp; ${week.weekStart === state.currentWeekStart ? 'THIS WEEK’S PROGRAMME' : 'UPCOMING PROGRAMME'}</span>
-      <h2>Week of ${htmlEscape(display.months)}</h2><p>${htmlEscape(display.year)} &nbsp;·&nbsp; Monday – Sunday<br>Prepared for the Life and Ministry meeting</p></div>
-      <div class="hero-aside"><span class="hero-flower" aria-hidden="true">✳</span><div class="hero-calendar"><span>${display.month}</span><strong>${display.day}–${atMidday(display.end).getUTCDate()}</strong><small>${display.year}</small></div></div></section>
-    <div class="info-strip"><div class="stat-card"><span class="stat-icon purple">♙</span><div><span>Meeting chairman</span><strong>${week.chairman ? short(week.chairman) : 'To be assigned'}</strong></div></div>
+      <h2>Thursday, ${htmlEscape(dateFormat(display.thursday, { day: 'numeric', month: 'long' }))}</h2>
+      <p>${htmlEscape(display.year)} &nbsp;·&nbsp; ${htmlEscape(rules.TYPE_LABELS[type])}<br>Week of ${htmlEscape(display.months)} ${htmlEscape(display.year)}</p></div>
+      <div class="hero-aside"><span class="hero-flower" aria-hidden="true">✳</span><div class="hero-calendar"><span>THURSDAY</span><strong>${display.day}</strong><small>${display.month} ${htmlEscape(display.year)}</small></div></div></section>
+    ${notice ? `<div class="special-notice ${hasMeeting ? 'meeting-held' : 'no-meeting'}"><span class="special-notice-icon" aria-hidden="true">${hasMeeting ? '✦' : '▦'}</span><div><strong>${htmlEscape(rules.TYPE_LABELS[type])}</strong><p>${htmlEscape(notice)}</p></div></div>` : ''}
+    ${hasMeeting ? `<div class="info-strip"><div class="stat-card"><span class="stat-icon purple">♙</span><div><span>Meeting chairman</span><strong>${week.chairman ? short(week.chairman) : 'To be assigned'}</strong></div></div>
       <div class="stat-card"><span class="stat-icon teal">▦</span><div><span>Total assignments</span><strong>${count} scheduled parts</strong></div></div>
-      <div class="stat-card"><span class="stat-icon orange">◷</span><div><span>Programme dates</span><strong>${htmlEscape(display.sidebar)} ${display.year}</strong></div></div></div>
+      <div class="stat-card"><span class="stat-icon orange">◷</span><div><span>Meeting date</span><strong>${htmlEscape(display.thursdayLong)}</strong></div></div></div>
     <div class="content-grid">
       ${sectionCard({ color: 'purple', icon: '✧', name: 'Treasures from God’s Word', note: 'Talk · Spiritual Gems · Bible Reading', parts: week.treasures, section: 'treasures' })}
       ${sectionCard({ color: 'teal', icon: '✦', name: 'Apply Yourself to the Field Ministry', note: 'Practice and improve your ministry skills', parts: week.ministry, section: 'ministry' })}
-      ${sectionCard({ color: 'orange', icon: '♡', name: 'Living as Christians', note: 'Christian living · Congregation Bible Study', parts: week.living, section: 'living' })}
-    </div>`;
+      ${sectionCard({ color: 'orange', icon: '♡', name: 'Living as Christians', note: type === 'co_visit' ? 'Christian living · First Circuit Overseer’s Talk' : 'Christian living · Congregation Bible Study', parts: livingParts, section: 'living' })}
+    </div>` : `<section class="no-meeting-card"><div class="no-meeting-emblem" aria-hidden="true">▦</div><h3>No Life and Ministry meeting this Thursday</h3><p>No assignments are displayed for this week. Use the menu on the left to check the next scheduled meeting.</p></section>`}`;
 }
 function renderEmpty() {
   dom.main.innerHTML = `<div class="page-heading"><div><div class="eyebrow">WEEKLY MEETING PROGRAMME</div><h1>Life and Ministry Schedule</h1><p>Meeting assignments, week by week.</p></div></div>
@@ -175,20 +185,39 @@ function editorAssignment(part, section, i) {
     </div></div>`;
 }
 function editPanel(label, description, section, action, addLabel) {
-  const items = state.draft[section];
+  const items = section === 'living' && rules.typeOf(state.draft) === 'co_visit'
+    ? state.draft.living.filter((p) => p.type !== 'study') : state.draft[section];
   return `<section class="edit-panel"><div class="edit-panel-head"><div><h3>${htmlEscape(label)}</h3><p>${htmlEscape(description)}</p></div><span class="section-count">${items.length} PARTS</span></div><div class="edit-panel-body">${items.map((p, i) => editorAssignment(p, section, i)).join('')}
     ${action ? `<button type="button" class="add-row" data-action="${action}">＋ ${htmlEscape(addLabel)}</button>` : ''}
-    ${section === 'living' ? '<div class="edit-note">Congregation Bible Study remains the final part and always has dedicated Conductor and Reader fields.</div>' : ''}
+    ${section === 'living' ? `<div class="edit-note">${rules.typeOf(state.draft) === 'co_visit' ? 'First Circuit Overseer’s Talk is the final part for this week. The Bible Study entry is saved for normal weeks.' : 'Congregation Bible Study remains the final part and always has dedicated Conductor and Reader fields.'}</div>` : ''}
     ${section === 'treasures' ? '<div class="edit-note">The 10-minute talk, 10-minute Spiritual Gems and 5-minute Bible Reading are the three standard parts. You can edit their titles, topics, numbers and assigned names.</div>' : ''}</div></section>`;
+}
+function selectField(label, field, value, choices, note = '') {
+  return `<div class="field"><label for="setting-${field}">${htmlEscape(label)}</label>
+    <select id="setting-${field}" data-field="${field}">${Object.entries(choices).map(([key, text]) =>
+      `<option value="${htmlEscape(key)}" ${value === key ? 'selected' : ''}>${htmlEscape(text)}</option>`).join('')}</select>
+    ${note ? `<p class="field-hint">${htmlEscape(note)}</p>` : ''}</div>`;
 }
 function renderEditor() {
   const week = state.draft, display = getWeek(week.weekStart);
-  dom.main.innerHTML = `<div class="editor-head"><div class="editor-title"><p class="eyebrow">ADMINISTRATOR · EDIT WEEK</p><h1>${htmlEscape(display.full)}</h1><p>Add participants, organise the assignments, then publish when ready.</p></div>
-    <div class="editor-actions"><span class="status-badge ${week.published ? 'published' : ''}">${week.published ? '● PUBLISHED' : '● DRAFT'}</span><button class="button button-soft" type="button" data-action="auto-number"># Auto-number</button><button class="button button-outline" type="button" data-action="cancel-edit">✕ Close editor</button></div></div>
-    <section class="edit-panel"><div class="edit-panel-head"><div><h3>Meeting chairman</h3><p>Assign the brother who will chair this meeting.</p></div></div><div class="edit-panel-body"><div class="field-grid">${formInput('Chairman’s name', week.chairman, '', '', 'chairman', 'Enter chairman’s full name')}</div></div></section>
+  const type = rules.typeOf(week), meetingHeld = rules.hasThursdayMeeting(week);
+  const notice = rules.specialNotice(week);
+  const coTalk = { ...rules.defaultCOTalk(week), ...(week.coTalk || {}) };
+  dom.main.innerHTML = `<div class="editor-head"><div class="editor-title"><p class="eyebrow">ADMINISTRATOR · EDIT WEEK</p><h1>Thursday, ${htmlEscape(dateFormat(display.thursday, { day: 'numeric', month: 'long', year: 'numeric' }))}</h1><p>Week of ${htmlEscape(display.full)} · Select the meeting type before entering assignments.</p></div>
+    <div class="editor-actions"><span class="status-badge ${week.published ? 'published' : ''}">${week.published ? '● PUBLISHED' : '● DRAFT'}</span><button class="button button-soft" type="button" data-action="auto-number" ${meetingHeld ? '' : 'disabled'}># Auto-number</button><button class="button button-outline" type="button" data-action="cancel-edit">✕ Close editor</button></div></div>
+    <section class="edit-panel special-week-editor"><div class="edit-panel-head"><div><h3>Meeting type for this week</h3><p>Choose a regular or special week. The display adjusts automatically.</p></div></div>
+      <div class="edit-panel-body"><div class="field-grid">${selectField('Week type', 'weekType', type, rules.TYPE_LABELS)}
+        ${type === 'memorial' ? selectField('When is the Memorial?', 'memorialTiming', rules.timingOf(week), rules.TIMING_LABELS, 'Weekday: no Thursday meeting. Weekend: Thursday meeting holds; no weekend meeting.') : `<div class="edit-option-explainer"><strong>Meeting day</strong><span>Thursday, ${htmlEscape(dateFormat(display.thursday, { day: 'numeric', month: 'long', year: 'numeric' }))}</span></div>`}</div>
+        ${notice ? `<div class="edit-note special-editor-note">${htmlEscape(notice)}</div>` : ''}
+        ${!meetingHeld ? '<div class="edit-note">The existing chairman and assignment details are safely preserved. They are hidden from the public while this week has no Thursday meeting. Switch to a meeting week to edit them.</div>' : ''}
+      </div></section>
+    ${meetingHeld ? `<section class="edit-panel"><div class="edit-panel-head"><div><h3>Meeting chairman</h3><p>Assign the brother who will chair this Thursday meeting.</p></div></div><div class="edit-panel-body"><div class="field-grid">${formInput('Chairman’s name', week.chairman, '', '', 'chairman', 'Enter chairman’s full name')}</div></div></section>
     ${editPanel('1. Treasures from God’s Word', 'The three regular assignments', 'treasures', null, null)}
     ${editPanel('2. Apply Yourself to the Field Ministry', 'Add or remove parts; every part has Assignee and Assistant fields', 'ministry', 'add-ministry', 'Add field ministry assignment')}
-    ${editPanel('3. Living as Christians', 'Add or remove parts before the Congregation Bible Study', 'living', 'add-living', 'Add Christian living assignment')}
+    ${editPanel('3. Living as Christians', type === 'co_visit' ? 'Congregation Bible Study is replaced by the First Circuit Overseer’s Talk' : 'Add or remove parts before the Congregation Bible Study', 'living', 'add-living', 'Add Christian living assignment')}
+    ${type === 'co_visit' ? `<section class="edit-panel co-talk-editor"><div class="edit-panel-head"><div><h3>First Circuit Overseer’s Talk</h3><p>Shown instead of the Congregation Bible Study. No conductor or reader is needed.</p></div></div><div class="edit-panel-body">
+      <div class="field-grid three">${formInput('Part number', coTalk.number, 'coTalk', 0, 'number', 'e.g. 8')}${formInput('Talk title', coTalk.title, 'coTalk', 0, 'title', 'First Circuit Overseer’s Talk')}${formInput('Minutes (0 = not specified)', coTalk.minutes, 'coTalk', 0, 'minutes', 'Optional')}</div>
+      <div class="field-grid two field-grid-spaced">${formInput('Talk theme (optional)', coTalk.topic, 'coTalk', 0, 'topic', 'Theme', 'span-full')}${formInput('Circuit Overseer / Speaker', coTalk.assignee, 'coTalk', 0, 'assignee', 'Full name')}</div></div></section>` : ''}` : ''}
     <div class="sticky-editor-bar"><p>${state.dirty ? '● You have unsaved changes' : 'Keep this week as a draft or make it public.'}</p><div class="editor-actions">
       ${week.published ? '<button type="button" class="button button-danger" data-action="unpublish">Unpublish</button>' : ''}
       <button type="button" class="button button-outline" data-action="save-week">Save ${week.published ? 'changes' : 'draft'}</button>
@@ -209,6 +238,9 @@ function confirmLeaveEditor() {
 function startEdit() {
   if (!state.authenticated || !selectedWeek()) return;
   state.draft = JSON.parse(JSON.stringify(selectedWeek()));
+  state.draft.weekType = rules.typeOf(state.draft);
+  state.draft.memorialTiming = rules.timingOf(state.draft);
+  state.draft.coTalk = { ...rules.defaultCOTalk(state.draft), ...(state.draft.coTalk || {}) };
   state.dirty = false;
   state.editing = true;
   state.viewPublic = false;
@@ -231,6 +263,7 @@ function addPart(section) {
     const study = pieces[pieces.length - 1];
     const n = Number(study.number);
     if (Number.isFinite(n)) study.number = String(Math.max(n + 1, nextNum + 1));
+    if (rules.typeOf(state.draft) === 'co_visit') state.draft.coTalk.number = study.number;
   }
   state.dirty = true;
   render();
@@ -301,6 +334,7 @@ async function performAction(element) {
     for (const section of ['treasures', 'ministry', 'living']) {
       for (const part of state.draft[section]) part.number = String(n++);
     }
+    if (state.draft.coTalk) state.draft.coTalk.number = state.draft.living.at(-1)?.number || String(n);
     state.dirty = true; render(); toast('Part numbers updated in order.');
   } else if (action === 'retry') await reload();
   else if (action === 'toggle-past') {
@@ -327,14 +361,20 @@ document.addEventListener('click', (ev) => {
   const btn = ev.target.closest('[data-action]');
   if (btn) { ev.preventDefault(); performAction(btn).catch((err) => toast(err.message)); }
 });
-document.addEventListener('input', (ev) => {
-  const input = ev.target;
-  if (!state.editing || !state.draft || !input.matches('input[data-field]')) return;
+function updateEditorField(input) {
+  if (!state.editing || !state.draft || !input.matches('input[data-field], select[data-field]')) return;
   const { section, index, field } = input.dataset;
-  const target = section ? state.draft[section]?.[Number(index)] : state.draft;
+  const target = section === 'coTalk' ? state.draft.coTalk : section ? state.draft[section]?.[Number(index)] : state.draft;
   if (!target || !Object.prototype.hasOwnProperty.call(target, field)) return;
   target[field] = field === 'minutes' ? (input.value === '' ? 0 : Number(input.value)) : input.value;
   state.dirty = true;
+  if (input.tagName === 'SELECT') render();
+}
+document.addEventListener('input', (ev) => {
+  if (ev.target.tagName !== 'SELECT') updateEditorField(ev.target);
+});
+document.addEventListener('change', (ev) => {
+  if (ev.target.tagName === 'SELECT') updateEditorField(ev.target);
 });
 document.getElementById('login-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();

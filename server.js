@@ -6,6 +6,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const store = require('./store');
+const meetingRules = require('./public/meeting-rules');
 
 if (fs.existsSync(path.join(__dirname, '.env')) && typeof process.loadEnvFile === 'function') {
   process.loadEnvFile(path.join(__dirname, '.env'));
@@ -88,7 +89,16 @@ function normaliseWeek(input, weekStart) {
   if (!Array.isArray(input.ministry) || input.ministry.length > 12) throw new Error('Up to 12 field ministry assignments are supported.');
   if (!Array.isArray(input.living) || input.living.length < 1 || input.living.length > 12) throw new Error('The Living as Christians section needs the Bible study as its final part.');
   if (input.living.at(-1)?.type !== 'study') throw new Error('Congregation Bible Study must be the final assignment.');
+  const weekType = meetingRules.typeOf(input);
+  if (input.weekType !== undefined && !Object.prototype.hasOwnProperty.call(meetingRules.TYPE_LABELS, input.weekType)) throw new Error('Unknown week type.');
+  if (input.memorialTiming !== undefined && !Object.prototype.hasOwnProperty.call(meetingRules.TIMING_LABELS, input.memorialTiming)) throw new Error('Invalid Memorial timing.');
+  const coBase = meetingRules.defaultCOTalk(input);
+  const coInput = { ...coBase, ...(input.coTalk && typeof input.coTalk === 'object' && !Array.isArray(input.coTalk) ? input.coTalk : {}) };
+  const coTalk = normalisePart(coInput, 'living', 0);
+  coTalk.id = 'co-talk'; coTalk.type = 'co_talk';
+  coTalk.title = coTalk.title || 'First Circuit Overseer’s Talk';
   return { weekStart, published: input.published === true, chairman: cleaned(input.chairman),
+    weekType, memorialTiming: meetingRules.timingOf(input), coTalk,
     treasures: input.treasures.map((p, i) => normalisePart(p, 'treasures', i)),
     ministry: input.ministry.map((p, i) => normalisePart(p, 'ministry', i)),
     living: input.living.map((p, i) => normalisePart(p, i === input.living.length - 1 ? 'study' : 'living', i)) };
@@ -98,13 +108,27 @@ function isValidMonday(date) {
     new Date(`${date}T12:00:00Z`).getUTCDay() === 1 &&
     new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) === date;
 }
+function publicWeek(week) {
+  const type = meetingRules.typeOf(week);
+  if (!meetingRules.hasThursdayMeeting(week)) return {
+    weekStart: week.weekStart, published: week.published, weekType: type,
+    memorialTiming: meetingRules.timingOf(week), chairman: '',
+    treasures: [], ministry: [], living: [], coTalk: null
+  };
+  if (type === 'co_visit') {
+    // The Bible study names are not part of the CO programme: don't expose them publicly.
+    return { ...week, living: week.living.filter((p) => p.type !== 'study'),
+      coTalk: { ...meetingRules.defaultCOTalk(week), ...(week.coTalk || {}) } };
+  }
+  return { ...week, coTalk: null };
+}
 async function apiHandler(req, res, pathname) {
   const method = req.method;
   if (method === 'GET' && pathname === '/api/bootstrap') {
     const current = await store.ensureWeeks();
     const admin = isAdmin(req); const weeks = await store.allWeeks();
     return sendJson(res, 200, { authenticated: admin, adminEnabled: Boolean(password && secret), currentWeekStart: current,
-      weeks: admin ? weeks : weeks.filter((w) => w.published && w.weekStart >= current) });
+      weeks: admin ? weeks : weeks.filter((w) => w.published && w.weekStart >= current).map(publicWeek) });
   }
   if (method === 'GET' && pathname === '/api/health') return sendJson(res, 200, { ok: true });
   if (!['POST', 'PUT'].includes(method)) return errorJson(res, 404, 'Unknown API endpoint.');
@@ -189,4 +213,4 @@ async function start() {
   makeServer().listen(port, '0.0.0.0', () => console.log(`Life and Ministry Schedule running on http://localhost:${port}`));
 }
 if (require.main === module) start().catch((err) => { console.error(err); process.exit(1); });
-module.exports = { makeServer, normaliseWeek, isValidMonday, start };
+module.exports = { makeServer, normaliseWeek, publicWeek, isValidMonday, start };

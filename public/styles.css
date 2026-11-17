@@ -48,3 +48,37 @@
   .public-view .assigned-people{margin-left:40px}
   .public-view .topbar-actions .button{font-size:12px}
 }
+
+/* Special meeting types and Thursday-first schedule (v3). */
+.special-week-editor{border-color:#dcd8fa;background:linear-gradient(155deg,#fff 75%,#faf9ff)}
+.field select{width:100%;padding:12px 35px 12px 12px;border:1px solid #e2e4ef;border-radius:9px;background-color:#fdfdff;color:#34384e;font-size:13px;outline:none;cursor:pointer;min-height:43px}
+.field select:focus{border-color:#8b80e6;box-shadow:0 0 0 3px #e9e6ff}
+.field-hint{font-size:11px;line-height:1.65;color:#81869c;margin:8px 0 0}
+.edit-option-explainer{border:1px solid #eaeaf3;border-radius:11px;background:#fafafe;display:flex;flex-direction:column;justify-content:center;gap:7px;padding:11px 14px}
+.edit-option-explainer strong{font-size:11px;color:#686f87}
+.edit-option-explainer span{font-size:14px;font-weight:800;color:#353a53}
+.special-editor-note{background:#f1efff;border-radius:10px;padding:12px 14px;color:#6255b1;margin-top:16px;font-size:12px;line-height:1.65}
+.co-talk-editor{border-color:#e5d5b5}
+.special-notice{margin-top:18px;display:flex;align-items:flex-start;gap:14px;padding:20px 22px;border:1px solid #dcd8f5;border-radius:14px;background:#f7f5ff}
+.special-notice.no-meeting{background:#fff8ec;border-color:#f1dfc3}
+.special-notice-icon{width:44px;height:44px;border-radius:12px;background:#eeeafa;display:grid;place-items:center;flex-shrink:0;color:#6653bd;font-size:22px}
+.special-notice.no-meeting .special-notice-icon{color:#ba862d;background:#fff0d8}
+.special-notice strong{display:block;font-size:16px;color:#343850;margin:1px 0 7px}
+.special-notice p{margin:0;font-size:14px;color:#666c84;line-height:1.65}
+.no-meeting-card{background:#fff;box-shadow:var(--shadow);border:1px solid #e9eaf2;border-radius:19px;padding:60px 25px;text-align:center;margin:22px 0}
+.no-meeting-emblem{display:grid;place-items:center;margin:0 auto 20px;width:70px;height:70px;border-radius:20px;background:#f0efff;color:#6053cc;font-size:30px}
+.no-meeting-card h3{font-size:24px;letter-spacing:-.55px;margin:0 0 13px;color:#2b2d49}
+.no-meeting-card p{font-size:15px;line-height:1.75;color:#7f8599;max-width:520px;margin:0 auto}
+.public-view .special-notice strong{font-size:18px}
+.public-view .special-notice p{font-size:16px}
+@media(max-width:660px){
+  .special-notice{padding:16px;gap:10px}
+  .special-notice-icon{width:36px;height:36px;min-width:36px;font-size:19px}
+  .special-notice strong{font-size:15px}
+  .special-notice p{font-size:13px}
+  .no-meeting-card{padding:46px 18px}
+  .no-meeting-card h3{font-size:20px}
+  .no-meeting-card p{font-size:14px}
+  .public-view .special-notice strong{font-size:16px}
+  .public-view .special-notice p{font-size:15px}
+}

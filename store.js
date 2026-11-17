@@ -34,6 +34,9 @@ function seedWeek(weekStart) {
     weekStart,
     published: false,
     chairman: '',
+    weekType: 'regular',
+    memorialTiming: 'weekday',
+    coTalk: { id: 'co-talk', type: 'co_talk', number: '8', title: 'First Circuit Overseer’s Talk', topic: '', minutes: 0, assignee: '' },
     treasures: [
       { id: 'talk', number: '1', title: '10-Minute Talk', topic: '', minutes: 10, assignee: '' },
       { id: 'gems', number: '2', title: 'Spiritual Gems', topic: '', minutes: 10, assignee: '' },
