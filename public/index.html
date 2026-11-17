@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#151a36" />
+  <meta name="description" content="View upcoming Life and Ministry meeting assignments by week." />
+  <meta property="og:title" content="Life and Ministry Schedule" />
+  <meta property="og:description" content="See this week’s meeting assignments and all upcoming published schedules." />
+  <meta property="og:type" content="website" />
+  <title>Life and Ministry Schedule</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="site-shell" id="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <a class="brand" href="/" aria-label="Life and Ministry Schedule home">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M7 10.5C11.5 8.4 15.2 9 18 11.1c2.8-2.1 6.5-2.7 11-0.6v17c-4.5-2.2-8.2-1.5-11 0.6-2.8-2.1-6.5-2.8-11-0.6v-17Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M18 11.1v17M10.5 15.2c2.4-.6 4.2-.3 5.1.4M20.5 15.6c1.1-.7 2.7-1 5-.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span><strong>Life &amp; Ministry</strong><small>Weekly Schedule</small></span>
+        </a>
+        <button class="icon-button sidebar-close" type="button" data-action="close-menu" aria-label="Close menu">✕</button>
+      </div>
+      <div class="side-info"><span class="live-dot"></span> YOUR MEETING ASSIGNMENTS</div>
+      <div class="side-section-label">WEEKLY PROGRAMME</div>
+      <nav class="week-navigation" id="week-navigation" aria-label="Select a schedule week"></nav>
+      <div class="sidebar-bottom"><span class="sidebar-bottom-icon">✦</span><div><strong>Grow in faith, together.</strong><p>Everything for the week, all in one place.</p></div></div>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebar-backdrop" data-action="close-menu"></div>
+    <div class="main-container">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button mobile-menu" type="button" data-action="open-menu" aria-label="Open weekly menu"><span class="menu-bars">☰</span></button>
+          <div class="breadcrumb"><span>Life &amp; Ministry</span><span class="breadcrumb-divider">/</span><strong>Schedule</strong></div>
+        </div>
+        <div class="topbar-actions" id="topbar-actions"></div>
+      </header>
+      <main class="main-content" id="main-content" aria-live="polite">
+        <div class="loading"><div class="spinner"></div><p>Loading the schedule…</p></div>
+      </main>
+      <footer class="site-footer"><span>Life and Ministry Schedule</span><span>Prepared with care for the congregation</span></footer>
+    </div>
+  </div>
+  <div class="modal-layer hidden" id="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="modal-backdrop" data-action="hide-login"></div>
+    <div class="modal-card">
+      <button type="button" class="icon-button modal-close" data-action="hide-login" aria-label="Close">✕</button>
+      <div class="modal-icon">✦</div>
+      <h2 id="login-title">Administrator access</h2>
+      <p>Sign in to organise, update and publish weekly assignments.</p>
+      <form id="login-form">
+        <label for="admin-password">Administrator password</label>
+        <input id="admin-password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+        <div class="form-error hidden" id="login-error"></div>
+        <button type="submit" class="button button-primary button-full">Sign in to manage <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="modal-footnote">Public visitors can view published weeks without signing in.</div>
+    </div>
+  </div>
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
