@@ -53,3 +53,20 @@ test('input cleansing trims, limits strings, and restricts durations', () => {
 test('date is formatted in Lagos timezone', () => {
   assert.match(formatLocalISODate(new Date('2026-11-16T23:30:00Z')), /^2026-11-17$/);
 });
+
+test('public and admin URLs both serve the app, without exposing a dashboard at the root', async (t) => {
+  const { makeServer } = require('../server');
+  const server = makeServer().listen(0, '127.0.0.1');
+  t.after(() => server.close());
+  await new Promise((resolve) => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const [publicRes, adminRes, stylesheet] = await Promise.all([
+    fetch(`${base}/`), fetch(`${base}/admin`), fetch(`${base}/styles.css?v=2`)
+  ]);
+  assert.equal(publicRes.status, 200);
+  assert.equal(adminRes.status, 200);
+  assert.equal(stylesheet.status, 200);
+  assert.match(await publicRes.text(), /Life and Ministry Schedule/);
+  assert.match(await adminRes.text(), /Administrator access/);
+  assert.match(await stylesheet.text(), /public-view \.person-name/);
+});

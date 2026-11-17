@@ -146,7 +146,8 @@ async function staticHandler(req, res, pathname) {
   let decoded;
   try { decoded = decodeURIComponent(pathname); }
   catch { return errorJson(res, 400, 'Invalid URL.'); }
-  if (decoded === '/') decoded = '/index.html';
+  // The admin editor has its own URL; the shared home page stays read-only.
+  if (decoded === '/' || decoded === '/admin' || decoded === '/admin/') decoded = '/index.html';
   const file = path.resolve(PUBLIC_DIR, `.${decoded}`);
   if (!file.startsWith(PUBLIC_DIR + path.sep) || file.includes('\0')) return errorJson(res, 403, 'Forbidden.');
   try {

@@ -5,7 +5,7 @@ A responsive website for organising **weekly Life and Ministry meeting assignmen
 ## What is included
 
 - A **public weekly schedule** with a left-hand menu that starts at the current week and lists future published weeks.
-- A password-protected **administrator editor**. Visitors do not need accounts.
+- A password-protected **administrator editor**. Visitors do not need accounts. Admin sign-in appears only at **`/admin`**; it is not displayed on the public link.
 - A **chairman** field for every week.
 - **Treasures from God's Word:** 10-minute Talk, 10-minute Spiritual Gems, 5-minute Bible Reading; assignment number, title/topic and assignee fields.
 - **Apply Yourself to the Field Ministry:** add/remove/reorder assignments, with number, title, topic, duration, assignee and assistant for every part.
@@ -28,13 +28,13 @@ A responsive website for organising **weekly Life and Ministry meeting assignmen
    node server.js
    ```
 
-6. Open **http://localhost:3000** in your browser. Click **Admin login** to add or edit weeks.
+6. Open **http://localhost:3000** in your browser. Open **http://localhost:3000/admin** to log in and add or edit weeks.
 
 **No `npm install` is required to test locally.** The default development database is `data/schedule.json`, created on first run. The JSON file is deliberately excluded from Git.
 
 ### How to prepare the schedule
 
-1. Click **Admin login** and enter the password from `.env`.
+1. Go to **`/admin`** on your website and enter the password from `.env`.
 2. Select **16–22 Nov**, or whichever current/upcoming week you need, on the left.
 3. Click **Edit this week**.
 4. Enter the chairman and each part's assigned participant. Use **Add field ministry assignment** and **Add Christian living assignment** to change section lengths. The Bible study stays last.
@@ -42,30 +42,64 @@ A responsive website for organising **weekly Life and Ministry meeting assignmen
 6. Click **Save draft** to keep it private, or **Publish week** to make it public.
 7. Click **Copy public link** and post that address in your WhatsApp/Telegram group.
 
-Members opening the link see only the current and future **published** weeks; they cannot edit the schedule.
+Members opening the public root link (`/`) see only the current and future **published** weeks; they cannot edit the schedule. The public schedule has larger text for readability. Only visit `/admin` yourself to edit and publish. A hidden admin link is not a substitute for a strong password.
 
-## Put it online (for a real shareable link)
+## Put it online completely free (GitHub + Neon + Render)
 
-**A local `localhost` address cannot be opened by members outside your computer.** You need to deploy the app. A simple option is **Railway + Neon PostgreSQL**:
+Use **Render Free Web Service** for the Node.js website, **Neon Free PostgreSQL** for the persistent database, and **GitHub Free** to store the code. Do not use a temporary local JSON file when hosted: Render's filesystem resets whenever its free web service restarts, redeploys or spins down. **Render's own free PostgreSQL databases expire after 30 days**, so use Neon instead. Free-plan allowances and terms may change.
 
-1. Create a free/paid PostgreSQL database with [Neon](https://neon.tech/) and copy its `DATABASE_URL` connection string.
-2. Upload this project to a GitHub repository. Do **not** upload `.env` or `data/schedule.json` (the provided `.gitignore` excludes them).
-3. In [Railway](https://railway.com/), create a new service using the GitHub repository.
-4. Add these Railway **environment variables**:
+### 1. Upload code to GitHub
 
-   | Variable | Value |
+1. Make a free account at https://github.com and create a repository named `life-and-ministry-schedule` (private is fine).
+2. Extract the ZIP. Choose **Add file > Upload files** and drag the **contents** of the extracted `life-and-ministry-schedule` folder into the repository, preserving `public/` and `tests/`. Commit the changes.
+3. Check that `package.json`, `server.js` and `store.js` appear at repository root (or remember the subfolder name for Render's Root Directory).
+4. **Never upload `.env`, database credentials or the local `data/schedule.json`.** These are excluded from Git, but be careful when using GitHub's upload form.
+
+### 2. Create a free database at Neon
+
+1. Sign up at https://console.neon.tech and select **Free**.
+2. Click **Create Project**, call it `life-ministry-schedule`, and finish setup.
+3. Open **Connect** in the Neon console and copy its complete **PostgreSQL connection string** (a URL starting with `postgresql://`, normally ending with `?sslmode=require`).
+4. Keep this database URL secret. It belongs only in Render's environment variables.
+
+### 3. Deploy using Render Free
+
+1. Sign up at https://dashboard.render.com.
+2. Select **New > Web Service**, connect your GitHub account, and choose the `life-and-ministry-schedule` repository.
+3. Configure:
+
+   | Setting | Value |
    |---|---|
+   | Name | `life-and-ministry-schedule` (or another available name) |
+   | Language / Runtime | Node |
+   | Branch | `main` |
+   | Root Directory | Leave empty if `package.json` is at repo root |
+   | Build Command | `npm install` |
+   | Start Command | `npm start` |
+   | Instance Type | **Free** |
+
+4. Add **Environment Variables** on Render. Use these exact keys:
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | Complete private PostgreSQL URL copied from Neon |
+   | `ADMIN_PASSWORD` | Your own strong, unique admin password |
+   | `SESSION_SECRET` | A randomly generated secret of **at least 32 characters** (keep it private) |
    | `NODE_ENV` | `production` |
-   | `DATABASE_URL` | Your Neon PostgreSQL connection URL, including SSL settings if required |
-   | `ADMIN_PASSWORD` | A new strong administrator password |
-   | `SESSION_SECRET` | A long random secret (at least 32 characters) |
 
-5. Railway will install the `pg` package from `package.json` and start the app with `npm start` (set **Start Command** to `npm start` if necessary).
-6. Open the public domain assigned by Railway. Log in, prepare and publish the first week. Select **Copy public link** and share it.
+5. Click **Deploy Web Service**. After a successful deploy, Render gives you a public HTTPS URL such as `https://life-and-ministry-schedule.onrender.com` (actual name varies).
+6. Open your URL with **`/admin`** at the end to sign in and edit a week, then select **Publish week** and share **Copy public link** with members.
 
-Database tables are created automatically in PostgreSQL on first start. **Do not rely on the local JSON file for hosted production:** some hosting platforms erase it when redeploying or restarting.
+Database tables and the current plus next 11 weeks are automatically created on first start. There is no manual SQL import. If an assignment is a draft, the public will not see it until you publish.
 
-If you prefer to use your own server, Node.js 22 and a PostgreSQL connection are sufficient. Configure HTTPS on the public domain.
+### Free-plan limitations
+
+- Render Free web services sleep after roughly **15 minutes of inactivity**, so the first opening after a quiet period may need about a minute to load.
+- Render provides a monthly Free-instance-hour allowance, with additional build/bandwidth limits. Free services can be suspended if limits are exceeded. Keep your plan set to **Free** and do not add a paid card or upgrade if your budget is strictly zero.
+- Neon Free has usage and storage limits but is more suitable than Render's 30-day-expiring free Postgres database for this app. Create occasional backups of important assignments.
+- Anyone with the public link can see names and assignments that you publish. Only the admin with the password can edit.
+
+Docs: https://render.com/docs/free ; https://render.com/docs/your-first-deploy ; https://neon.com/docs/introduction/free-tier
 
 ## Files
 

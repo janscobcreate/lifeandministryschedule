@@ -1,8 +1,11 @@
 'use strict';
 const state = {
+  adminRoute: /^\/admin\/?$/.test(window.location.pathname),
   authenticated: false, adminEnabled: false, weeks: [], currentWeekStart: '', selected: '',
   editing: false, draft: null, dirty: false, showPast: false, viewPublic: false, saving: false
 };
+// No management controls appear on the public URL, even if an admin is signed in.
+document.body.classList.toggle('public-view', !state.adminRoute);
 const dom = {
   main: document.getElementById('main-content'), nav: document.getElementById('week-navigation'),
   actions: document.getElementById('topbar-actions'), shell: document.getElementById('app-shell'),
@@ -48,7 +51,7 @@ async function api(endpoint, options = {}) {
 }
 async function reload() {
   const data = await api('/api/bootstrap');
-  state.authenticated = data.authenticated;
+  state.authenticated = state.adminRoute && data.authenticated;
   state.adminEnabled = data.adminEnabled;
   state.weeks = data.weeks;
   state.currentWeekStart = data.currentWeekStart;
@@ -63,7 +66,10 @@ function toast(message) {
   toast.timer = setTimeout(() => dom.toast.classList.add('hidden'), 3600);
 }
 function renderHeader() {
-  dom.actions.innerHTML = state.authenticated
+  // Members only see Share on the public link; admin controls live at /admin.
+  dom.actions.innerHTML = !state.adminRoute
+    ? `<button type="button" class="button button-outline" data-action="share">↗ Share</button>`
+    : state.authenticated
     ? `<span class="status-badge published admin-label">ADMIN ACCESS</span>
        <button type="button" class="button button-outline" data-action="share">↗ <span class="admin-label">Copy public link</span><span class="mobile-only-label">Share</span></button>
        <button type="button" class="button button-outline" data-action="logout">Sign out</button>`
@@ -349,6 +355,12 @@ document.getElementById('login-form').addEventListener('submit', async (ev) => {
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape') { dom.modal.classList.add('hidden'); closeMenu(); }
 });
-reload().catch((err) => {
+reload().then(() => {
+  if (state.adminRoute && !state.authenticated) {
+    dom.loginError.classList.add('hidden');
+    dom.modal.classList.remove('hidden');
+    document.getElementById('admin-password').focus();
+  }
+}).catch((err) => {
   dom.main.innerHTML = `<div class="empty-state"><span class="empty-icon">!</span><h2>Unable to load schedule</h2><p>${htmlEscape(err.message)}. Please check your connection or server configuration.</p><button type="button" class="button button-primary" data-action="retry">Try again</button></div>`;
 });

@@ -7,3 +7,44 @@
 /* Utilities kept in the stylesheet to work with a restrictive CSP. */
 .mobile-only-label{display:none}.side-add-week{width:calc(100% - 14px);margin:16px 7px 3px}.side-past-toggle{width:calc(100% - 14px);margin:9px 7px}.field-grid-spaced{margin-top:13px}
 @media(max-width:660px){.topbar-actions .mobile-only-label{display:inline}}
+
+
+/* Public schedule accessibility: comfortably readable labels and names. */
+.public-view .brand strong{font-size:15px}
+.public-view .brand small{font-size:12px}
+.public-view .side-info{font-size:11px}
+.public-view .side-section-label{font-size:11px}
+.public-view .nav-group-title{font-size:10px}
+.public-view .week-link-text strong{font-size:14px;white-space:normal;line-height:1.35}
+.public-view .week-link-text small{font-size:12px}
+.public-view .sidebar-bottom strong{font-size:12px}
+.public-view .sidebar-bottom p{font-size:12px}
+.public-view .breadcrumb{font-size:13px}
+.public-view .button{font-size:13px}
+.public-view .eyebrow{font-size:11px}
+.public-view .page-heading h1{font-size:29px}
+.public-view .page-heading p{font-size:14px}
+.public-view .hero-label{font-size:11px}
+.public-view .hero h2{font-size:32px}
+.public-view .hero-copy>p{font-size:14px}
+.public-view .stat-card span:not(.stat-icon){font-size:11px}
+.public-view .stat-card strong{font-size:14px;line-height:1.45}
+.public-view .section-header h3{font-size:17px}
+.public-view .section-header p{font-size:13px;line-height:1.5}
+.public-view .section-count{font-size:11px}
+.public-view .assignment-num{width:36px;height:36px;font-size:14px}
+.public-view .assignment-details strong{font-size:14px;line-height:1.5}
+.public-view .assignment-details .topic{font-size:13px;line-height:1.5}
+.public-view .person-name{font-size:14px;line-height:1.45}
+.public-view .person-meta{font-size:11px;line-height:1.5}
+.public-view .assigned-second{font-size:13px;line-height:1.5}
+.public-view .minute-chip{font-size:12px}
+.public-view .section-footer{font-size:12px}
+.public-view .empty-state p{font-size:14px}
+@media(max-width:660px){
+  .public-view .page-heading h1{font-size:25px}
+  .public-view .hero h2{font-size:26px}
+  .public-view .section-header h3{font-size:16px}
+  .public-view .assigned-people{margin-left:40px}
+  .public-view .topbar-actions .button{font-size:12px}
+}
